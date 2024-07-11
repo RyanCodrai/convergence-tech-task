@@ -16,5 +16,4 @@ start: ## Stop containers
 stop: ## Start containers
 	docker-compose -f docker-compose.dev.yaml down
 
-restart: ## Stop and sttart containers
-	stop start
+restart: stop start ## Stop and start containers
