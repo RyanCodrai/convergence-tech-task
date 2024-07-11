@@ -1,8 +1,7 @@
 from langchain.chat_models import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate
 from langchain.schema import StrOutputParser
-
-from src.settings import settings
+from settings import settings
 
 
 class TopicCreator:
