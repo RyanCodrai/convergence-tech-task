@@ -15,6 +15,7 @@ annotated-types==0.7.0
 anyio==4.4.0
     # via
     #   httpx
+    #   langfuse
     #   openai
 async-timeout==4.0.3
     # via
@@ -22,6 +23,8 @@ async-timeout==4.0.3
     #   langchain
 attrs==23.2.0
     # via aiohttp
+backoff==2.2.1
+    # via langfuse
 certifi==2024.7.4
     # via
     #   httpcore
@@ -44,11 +47,14 @@ h11==0.14.0
 httpcore==1.0.5
     # via httpx
 httpx==0.27.0
-    # via openai
+    # via
+    #   langfuse
+    #   openai
 idna==3.7
     # via
     #   anyio
     #   httpx
+    #   langfuse
     #   requests
     #   yarl
 jsonpatch==1.33
@@ -61,7 +67,7 @@ langchain==0.2.7
     #   langchain-community
 langchain-community==0.2.7
     # via -r requirements/prod.in
-langchain-core==0.2.13
+langchain-core==0.2.15
     # via
     #   langchain
     #   langchain-community
@@ -71,6 +77,8 @@ langchain-openai==0.1.15
     # via -r requirements/prod.in
 langchain-text-splitters==0.2.2
     # via langchain
+langfuse==2.39.1
+    # via -r requirements/prod.in
 langsmith==0.1.85
     # via
     #   langchain
@@ -94,14 +102,16 @@ openai==1.35.13
     #   langchain-openai
 orjson==3.10.6
     # via langsmith
-packaging==24.1
+packaging==23.2
     # via
     #   langchain-core
+    #   langfuse
     #   marshmallow
 pydantic==2.8.2
     # via
     #   langchain
     #   langchain-core
+    #   langfuse
     #   langsmith
     #   openai
     #   pydantic-settings
@@ -155,5 +165,7 @@ typing-inspect==0.9.0
     # via dataclasses-json
 urllib3==2.2.2
     # via requests
+wrapt==1.16.0
+    # via langfuse
 yarl==1.9.4
     # via aiohttp
