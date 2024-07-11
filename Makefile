@@ -1,21 +1,20 @@
 # MAKEFILE
-# Runs main scripts
 
-build: ## build dev image
+build: ## Build image
 	docker-compose -f docker-compose.dev.yaml build
 
-build-no-cache: ## build dev image from scratch
+build-no-cache: ## Build image from scratch
 	docker-compose -f docker-compose.dev.yaml build --no-cache
 
-deps: ## compile dependencies.
-	$(DOCKER_CMD) python3 -m piptools compile --upgrade requirements/prod.in -o requirements.txt
-	$(DOCKER_CMD) python3 -m piptools compile --upgrade requirements/dev.in -o requirements.dev.txt
+deps: ## Compile dependencies
+	python3 -m piptools compile --upgrade requirements/prod.in -o requirements.txt
 
-start: ## stops dev services.
+start: ## Stop containers
 	docker-compose -f docker-compose.dev.yaml up -d
 	docker exec -it project-assistant-api-dev bash
 
-stop: ## starts dev services.
+stop: ## Start containers
 	docker-compose -f docker-compose.dev.yaml down
 
-restart: stop start ## restart dev services.
+restart: ## Stop and sttart containers
+	stop start
