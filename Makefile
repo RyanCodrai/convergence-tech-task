@@ -11,7 +11,7 @@ deps: ## Compile dependencies
 
 start: ## Stop containers
 	docker-compose -f docker-compose.dev.yaml up -d
-	docker exec -it project-assistant-api-dev bash
+	docker exec -it 20-questions bash
 
 stop: ## Start containers
 	docker-compose -f docker-compose.dev.yaml down
