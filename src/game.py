@@ -1,17 +1,18 @@
-from langchain.chat_models import ChatOpenAI
+from langchain.memory import ConversationBufferMemory
 from langchain.prompts import ChatPromptTemplate
-from langchain.schema import StrOutputParser
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_openai import ChatOpenAI
 from settings import settings
 
 
 class TopicCreator:
-    def __init__(self):
+    def __init__(self, temperature: float = 0.7):
         chat = ChatOpenAI(
-            model_name="gpt-3.5-turbo",
-            openai_api_key=settings.OPENAI_API_KEY,
+            model_name="gpt-3.5-turbo", openai_api_key=settings.OPENAI_API_KEY, temperature=temperature
         )
         prompt = ChatPromptTemplate.from_template(
-            """You are the host in a game of 20 questions. Your task is to think of an object or living thing as the "topic" of the game. 
+            """You are the host in a game of 20 questions. Your task is to think of an object or living thing as the "topic" of the game.
 
             Requirements for the topic:
             1. It should be a specific object or living thing, not a category or abstract concept.
@@ -27,8 +28,31 @@ class TopicCreator:
         return self.chain.invoke({"input": ""})
 
 
-# Usage example
+class QuestionAsker:
+    def __init__(self, temperature: float = 0.7):
+        llm = ChatOpenAI(
+            model_name="gpt-3.5-turbo", openai_api_key=settings.OPENAI_API_KEY, temperature=temperature
+        )
+        prompt = ChatPromptTemplate.from_messages(
+            [
+                (
+                    "system",
+                    "You are playing 20 questions. Based on previous questions and answers, propose a new yes/no question to ask that will help guess the topic. The topic is a specific object or living thing, not a category or abstract concept. ",
+                ),
+                ("user", "Here's the game history so far:\n{history}"),
+                ("user", "Please ask a new yes/no question."),
+            ]
+        )
+        self.memory = ConversationBufferMemory(input_key="history", memory_key="history")
+        self.chain = prompt | llm
+
+    def ask_question(self):
+        # Use the memory's conversation history to generate the next question
+        history = self.memory.load_memory_variables({})["history"]
+        result = self.chain.invoke({"history": history})
+        return result.content
+
+
 if __name__ == "__main__":
-    creator = TopicCreator()
-    topic = creator.create_topic()
-    print(f"Generated topic: {topic}")
+    # print(TopicCreator().create_topic())
+    print(QuestionAsker().ask_question())
