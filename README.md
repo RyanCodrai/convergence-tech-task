@@ -3,4 +3,10 @@ LLM Agents take-home task for convergence AI
 
 
 # Planning
-![Agent Architechture Diagram](agent_architechture.png)
+
+### Agent architechture
+![Agent Architechture Diagram](readme_resources/agent_architechture.png)
+
+### Initial thoughts
+- We can use a 
+
