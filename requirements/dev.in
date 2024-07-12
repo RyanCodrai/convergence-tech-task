@@ -1,0 +1,9 @@
+# include prod libs
+-r prod.in
+
+# unit test and pre-commits
+pytest
+coverage
+pre-commit
+pip-tools
+pytest-asyncio
