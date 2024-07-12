@@ -2,11 +2,11 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from src.game import QuestionAnswerer, QuestionPlanner, QuestionReviewer, TopicCreator
+from src.agent import QuestionAnswerer, QuestionPlanner, QuestionReviewer, TopicCreator
 
 
 @pytest.mark.asyncio
-@patch("src.game.AsyncOpenAI")
+@patch("src.agent.AsyncOpenAI")
 async def test_topic_creator(MockAsyncOpenAI):
     # Create a mock for the response to mimic the actual return structure
     mock_response = MagicMock()
@@ -23,7 +23,7 @@ async def test_topic_creator(MockAsyncOpenAI):
 
 
 @pytest.mark.asyncio
-@patch("src.game.AsyncOpenAI")
+@patch("src.agent.AsyncOpenAI")
 async def test_question_answerer(MockAsyncOpenAI):
     # Create a mock for the response to mimic the actual return structure
     mock_response = MagicMock()
@@ -46,7 +46,7 @@ async def test_question_answerer(MockAsyncOpenAI):
 
 
 @pytest.mark.asyncio
-@patch("src.game.AsyncOpenAI")
+@patch("src.agent.AsyncOpenAI")
 async def test_question_planner(MockAsyncOpenAI):
     # Create a mock for the response to mimic the actual return structure
     mock_response = MagicMock()
@@ -63,7 +63,7 @@ async def test_question_planner(MockAsyncOpenAI):
 
 
 @pytest.mark.asyncio
-@patch("src.game.AsyncOpenAI")
+@patch("src.agent.AsyncOpenAI")
 async def test_question_reviewer(MockAsyncOpenAI):
     # Create a mock for the response to mimic the actual return structure
     mock_response = MagicMock()
