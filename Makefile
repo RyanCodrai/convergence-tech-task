@@ -25,7 +25,7 @@ stop: ## Start containers
 restart: stop start ## Stop and start containers
 
 app: ## run the application
-	python3 src/game.py 
+	python3 src/main.py 
 
 tests:
 	coverage run -m pytest && coverage report
