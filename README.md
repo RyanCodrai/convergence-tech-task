@@ -30,9 +30,11 @@ The LLM calls are optimised by ensuring that they are run asynchronously. We set
 We add four unit tests, one for each of our agents and we mock the output we might observe from each LLM. These tests aim to catch any small bugs that may result from agent interface changes. Ideally, these unit tests would be run as part of a CI/CD pipeline.
 
 ### Evaluation
-The task of the question answering agent is relatively simple but still sometimes prone to error. We could investigate incorrect answers by cross-checking the answers to questions in another LLM, either at runtime or afterwards. A rather simple gauge of how well the question planner performs is the number of questions required to guess the game topic. Over a large number of runs I expect this to be a good proxy for the combined quesiton planner and question reviewer team performance.
+The task of the question answering agent is relatively simple but still not 100% reliable. We could investigate incorrect answers by cross-checking the yes/no answers to questions using another LLM, either at runtime or after analysing results in LangFuse.
+
+A rather simple gauge of how well the question planner performs is the number of questions required to guess the game topic. Over a large number of runs I expect this to be a good proxy for the combined quesiton planner and question reviewer team performance.
 
 We could make the task easier or harder by varying the number of questions given to the planner but also by varying the obsecurity of the object or living thing chosen. We could make things easier by allowing the answerer to give hot/warm/cold clues. The number of reviews with the reviewer would be another metric that could be used to track problem difficulty and solution efficiency.
 
 ### Future work
-The next step for this project would be to allow per-run setting of prompt strings. LangFuse has the ability to catalogue prompts as well as trace LLM calls, so each set of prompt strings could be cached and then provided at runtime to each simulation. The results of the tests, along with the config values used, can be saved for analysis.
+The next step for this project would be to allow per-run setting of prompt strings. LangFuse has the ability to catalogue prompts as well as trace LLM calls, so each set of prompt strings could be cached and then provided at runtime to each simulation. The results of the tests, along with the config values used, can be saved for analysis. Maximising the ease of running experiments is ultimately what would allow us to iterate most quickly and find an architechture and set of prompts that adequately solve the problem.
