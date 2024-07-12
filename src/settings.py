@@ -7,7 +7,7 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str
     LANGFUSE_SECRET_KEY: str
     LANGFUSE_PUBLIC_KEY: str
-    PLANNER_REVIEW_COUNT: int
+    QUESTION_REVIEW_COUNT: int
     CONCURRENT_GAMES: int
     TOTAL_GAMES: int
 

@@ -18,7 +18,7 @@ class GameCoordinator:
         self.questions_asked = 0
 
     async def plan_question(self) -> Question:
-        for _ in range(settings.PLANNER_REVIEW_COUNT):
+        for _ in range(settings.QUESTION_REVIEW_COUNT):
             question = await self.question_planner.ask_question(self.questions_asked)
             feedback = await self.question_reviewer.review_question(question.question, self.questions_asked)
             if feedback.good_question:
