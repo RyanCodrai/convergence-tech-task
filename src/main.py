@@ -1,20 +1,10 @@
 import asyncio
 import logging
-import os
 import time
-
-from langfuse import Langfuse
 
 from src.agent import QuestionAnswerer, QuestionPlanner, QuestionReviewer
 from src.models import GameResult, Question
 from src.settings import settings
-
-os.environ["OPENAI_API_KEY"] = settings.OPENAI_API_KEY
-langfuse = Langfuse(
-    secret_key=settings.LANGFUSE_SECRET_KEY,
-    public_key=settings.LANGFUSE_PUBLIC_KEY,
-    host="https://cloud.langfuse.com",
-)
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
