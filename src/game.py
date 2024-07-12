@@ -1,30 +1,71 @@
+import asyncio
+import logging
+import os
+import time
 from abc import ABC, abstractmethod
+from typing import Optional, Union
 
-from langchain.schema import AIMessage, HumanMessage, SystemMessage
-from langchain_openai import ChatOpenAI
-from settings import settings
-from tenacity import retry, stop_after_attempt, wait_fixed
+from langchain.output_parsers import PydanticOutputParser
+from langchain_core.output_parsers import PydanticOutputParser
+from langfuse import Langfuse
+from langfuse.decorators import observe
+from langfuse.openai import AsyncOpenAI
+from pydantic import BaseModel
+from tenacity import before_sleep_log, retry, stop_after_attempt
+
+from src.models import AnswerSchema, GameResult, Question, QuestionReview
+from src.settings import settings
+
+os.environ["OPENAI_API_KEY"] = settings.OPENAI_API_KEY
+langfuse = Langfuse(
+    secret_key=settings.LANGFUSE_SECRET_KEY,
+    public_key=settings.LANGFUSE_PUBLIC_KEY,
+    host="https://cloud.langfuse.com",
+)
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
 
 class Agent(ABC):
-    def __init__(self, temperature: float = 0.7):
-        self.llm = ChatOpenAI(
-            model_name="gpt-3.5-turbo", openai_api_key=settings.OPENAI_API_KEY, temperature=temperature
-        )
-        self.history: list[HumanMessage | AIMessage] = []
-        self.system_message = SystemMessage(content=self.system_prompt)
+    def __init__(self, temperature: float = 0.7, api_key: Optional[str] = None):
+        self.temperature = temperature
+        self.history: list[dict] = []
+        self.client = AsyncOpenAI(api_key=settings.OPENAI_API_KEY)
 
     @property
     @abstractmethod
     def system_prompt(self) -> str: ...
 
-    def respond(self) -> str:
-        response = self.llm([self.system_message] + self.history)
-        self.history.append(AIMessage(content=response.content))
-        return response.content
+    async def generate_output(self, structured_response: Optional[BaseModel] = None) -> Union[str, BaseModel]:
+        messages = [
+            {"role": "system", "content": self.system_prompt},
+            *self.history,
+        ]
 
-    def listen(self, feedback: str) -> None:
-        self.history.append(HumanMessage(content=feedback))
+        if structured_response:
+            parser = PydanticOutputParser(pydantic_object=structured_response)
+            format_instructions = parser.get_format_instructions()
+            messages.append({"role": "user", "content": format_instructions})
+
+        response = (
+            (
+                await self.client.chat.completions.create(
+                    model="gpt-4o", temperature=self.temperature, messages=messages
+                )
+            )
+            .choices[0]
+            .message.content
+        )
+
+        self.history.append({"role": "assistant", "content": response})
+
+        if structured_response:
+            return parser.parse(response)
+        return response
+
+    def receive_input(self, input_text: str) -> None:
+        self.history.append({"role": "user", "content": input_text})
 
 
 class TopicCreator(Agent):
@@ -35,95 +76,173 @@ class TopicCreator(Agent):
 
         Requirements for the topic:
         1. It should be a specific object or living thing, not a category or abstract concept.
-        2. It should be something that most people would recognize.
+        2. It should be something that most people would recognise.
         3. It should not be too obscure or too broad.
-        4. It should be challenging but possible to guess within 20 yes-or-no questions."""
+        4. It should be challenging but possible to guess within 20 yes-or-no questions.
+        5. It should be random."""
 
-    def create_topic(self) -> str:
-        self.listen(
-            "Generate a suitable topic for the game. Return only the name of the object or living thing, nothing else."
-        )
-        return self.respond()
+    @observe()
+    @retry(
+        stop=stop_after_attempt(3),
+        before_sleep=before_sleep_log(logger, logging.ERROR),
+    )
+    async def create_topic(self) -> str:
+        self.receive_input("Generate a suitable topic for the game. Return only the name, nothing else.")
+        topic = await self.generate_output()
+        logger.info(f"Topic created: {topic}")
+        return topic
 
 
 class QuestionAnswerer(Agent):
     def __init__(self, temperature: float = 0.7):
         super().__init__(temperature)
-        game_topic = TopicCreator().create_topic()
-        self.listen(f"The topic is '{game_topic}'.")
+        loop = asyncio.get_event_loop()
+        self.game_topic_future = asyncio.ensure_future(TopicCreator().create_topic(), loop=loop)
 
     @property
     def system_prompt(self) -> str:
         return """
-        You are answering questions in a game of 20 questions.
-        Based on the current question, provide only a 'yes' or 'no' answer in lowercase.
-        Never share the topic of the game directly."""
+        You are answering yes/no questions in a game of 20 questions.
+        NEVER share the topic of the game directly.
+        DO let the player know if they have guessed the topic correctly."""
 
-    @retry(stop=stop_after_attempt(3), wait=wait_fixed(0))
-    def answer_question(self, quesiton: str) -> str:
-        self.listen(quesiton)
-        answer = self.respond()
-        if answer not in {"yes", "no"}:
-            self.listen("Please only answer with 'yes' or 'no'")
-            raise ValueError(f"Answer '{answer}' provided by QuestionAnswerer was not a yes or no answer.")
+    @observe()
+    @retry(
+        stop=stop_after_attempt(3),
+        before_sleep=before_sleep_log(logger, logging.ERROR),
+    )
+    async def answer_question(self, question: str) -> AnswerSchema:
+        topic = await self.game_topic_future
+        self.receive_input(f"The topic is '{topic}'.")
+        self.receive_input(question)
+        answer = await self.generate_output(AnswerSchema)
+        logger.info(f"Question answered: {question} -> {answer.answer}")
         return answer
 
 
-class QuestionAsker(Agent):
-    @property
-    def system_prompt(self) -> str:
-        return """
-        You are playing 20 questions. Based on previous questions and answers, propose a new yes/no question to ask that will help guess the topic.
-        The topic is a specific object or living thing, not a category or abstract concept. Randomize your questions when possible.
-        If you feel confident you know what the object or living thing is you should ask if it's what you think it is."""
-
-    def ask_question(self) -> str:
-        self.listen("Please ask a new yes/no question.")
-        return self.respond()
-
-    def capture_feedback(self, feedback: str) -> None:
-        self.listen(feedback)
-
-
 class QuestionPlanner(Agent):
+    def __init__(self, temperature: float = 0.7):
+        super().__init__(temperature)
+
     @property
     def system_prompt(self) -> str:
         return """
-        You are helping to plan the next question in a game of 20 questions. Based on the current topic and the history of questions and answers, refine or propose a new question."""
+        ### Objective:
+        You are a Question Asker in a game of 20 questions. Your task is to plan and ask questions that will help identify the topic chosen by the Topic Creator. You will formulate questions and submit them to the Question Reviewer to ensure they are strategic, clear, and effective.
 
-    def propose_question(self) -> str:
-        self.listen("Propose or refine a new question based on the current topic and history.")
-        return self.respond()
+        ### Instructions:
+        1. **Understand the Context:** Review the current state of the game, including previous questions and answers.
+        2. **Formulate Questions:** Based on the information available, plan clear and concise questions that will help narrow down the topic.
+        3. **Submit for Review:** Submit your proposed questions to the Question Reviewer for feedback.
+        4. **Incorporate Feedback:** Based on the review, refine your questions to improve their effectiveness, clarity, and relevance.
+        5. **Ask the Question:** Once approved by the Question Reviewer, ask the question to the Question Answerer.
+        6. **Record Responses:** Keep track of the responses from the Question Answerer and use this information to guide your subsequent questions.
+
+        ### Considerations:
+        - **Effectiveness:** Ensure each question helps in significantly narrowing down the topic.
+        - **Clarity:** Formulate questions that are clear and easy to understand.
+        - **Relevance:** Ensure the questions are relevant to the topic and the information gathered so far.
+        - **Avoid Redundancy:** Avoid questions that have already been effectively answered indirectly."""
+
+    @observe()
+    @retry(
+        stop=stop_after_attempt(3),
+        before_sleep=before_sleep_log(logger, logging.ERROR),
+    )
+    async def ask_question(self, questions_asked: int) -> Question:
+        self.receive_input(f"Questions asked so far: {questions_asked}.")
+        self.receive_input("Please ask a new yes/no question.")
+        question = await self.generate_output(Question)
+        logger.info(f"Question created: {question.question}")
+        return question
+
+    def receive_feedback(self, question_review: BaseModel) -> None:
+        self.receive_input(str(question_review))
 
 
-# class GameCoordinator:
-#     def __init__(self):
-#         self.topic_creator = TopicCreator()
-#         self.question_asker = QuestionAsker()
-#         self.question_planner = QuestionPlanner()
-#         self.question_answerer = QuestionAnswerer()
-#         self.history = []
+class QuestionReviewer(Agent):
+    @property
+    def system_prompt(self) -> str:
+        return """
+        ### Objective:
+        You are a Question Reviewer. Your task is to review the questions proposed by the Question Asker and determine whether each question is good to ask. Your feedback should include a clear decision and reasoning to ensure each question effectively contributes to narrowing down the topic.
 
-#     def start_game(self):
-#         topic = self.topic_creator.create_topic()
-#         print(f"Topic created: {topic}")
-#         for _ in range(20):
-#             question = self.question_planner.propose_question()
-#             print(f"Proposed question: {question}")
-#             refined_question = self.question_asker.ask_question()
-#             print(f"Refined question: {refined_question}")
-#             answer = self.question_answerer.answer_question()
-#             print(f"Answer: {answer}")
-#             self.history.append((refined_question, answer))
-#             if answer.lower() == "yes" and "correct" in refined_question.lower():
-#                 print("Correct guess!")
-#                 break
-#         else:
-#             print("20 questions asked. Game over.")
+        ### Instructions:
+        1. **Understand the Context:** Review the current state of the game, including the topic and previous questions and answers.
+        2. **Review Proposed Question:** Examine the question proposed by the Question Asker.
+        3. **Decision Making:** Decide whether the proposed question is a good one to ask.
+        4. **Provide Feedback:** Explain your decision with clear reasoning, focusing on the question's effectiveness, clarity, and relevance.
+        5. **Approval or Rejection:** Clearly state whether the question is approved or rejected, and if rejected, suggest improvements or alternatives.
+
+        ### Considerations:
+        - **Effectiveness:** Does the question help in significantly narrowing down the topic?
+        - **Clarity:** Is the question clear and easy to understand?
+        - **Relevance:** Is the question relevant to the topic and the information gathered so far?
+        - **Redundancy:** Avoid questions that have already been answered or are redundant."""
+
+    @observe()
+    @retry(
+        stop=stop_after_attempt(3),
+        before_sleep=before_sleep_log(logger, logging.ERROR),
+    )
+    async def review_question(self, question: str, questions_asked: int) -> QuestionReview:
+        self.receive_input(f"Questions asked so far: {questions_asked}")
+        self.receive_input(f"Question for review: {question}")
+        review = await self.generate_output(QuestionReview)
+        logger.info(f"Question reviewed: {question} -> Approved: {review.good_question}")
+        return review
+
+    def receive_feedback(self, question_review: BaseModel) -> None:
+        self.receive_input(str(question_review))
+
+
+class GameCoordinator:
+    def __init__(self):
+        self.question_answerer = QuestionAnswerer()
+        self.question_planner = QuestionPlanner()
+        self.question_reviewer = QuestionReviewer()
+        self.questions_asked = 0
+
+    async def plan_question(self) -> Question:
+        for _ in range(settings.PLANNER_REVIEW_COUNT):
+            question = await self.question_planner.ask_question(self.questions_asked)
+            feedback = await self.question_reviewer.review_question(question.question, self.questions_asked)
+            if feedback.good_question:
+                break
+        self.questions_asked += 1
+        return question
+
+    async def start_game(self) -> GameResult:
+        logger.info(f"Beginning 20 questions with topic {await self.question_answerer.game_topic_future}")
+        start_time = time.time()
+        while self.questions_asked < 20:
+            question = await self.plan_question()
+            answer = await self.question_answerer.answer_question(question.question)
+
+            if answer.topic_guessed == "yes":
+                logger.info(f"Topic found in {self.questions_asked} questions.")
+                break
+
+            self.question_planner.receive_feedback(answer)
+
+        result = GameResult(time_taken=time.time() - start_time, questions_asked=self.questions_asked)
+        logger.info(f"Game ended. {str(result)}")
+        return result
+
+
+async def run_game_concurrent(semaphore: asyncio.Semaphore):
+    async with semaphore:
+        game = GameCoordinator()
+        await game.start_game()
+
+
+async def main():
+    semaphore = asyncio.Semaphore(settings.CONCURRENT_GAMES)  # Limit to 3 concurrent games
+    games: list[asyncio.Task] = []
+    for _ in range(settings.TOTAL_GAMES):  # Queue up 10 games
+        games.append(asyncio.create_task(run_game_concurrent(semaphore)))
+    await asyncio.gather(*games)  # Run all games
 
 
 if __name__ == "__main__":
-    # game_coordinator = GameCoordinator()
-    # game_coordinator.start_game()
-
-    print(QuestionAnswerer().answer_question("Is it something that can be found indoors?"))
+    asyncio.run(main())
