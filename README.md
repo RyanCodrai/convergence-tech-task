@@ -6,7 +6,7 @@ LLM Agents take-home task for convergence AI
 1. **Compile dependencies** by running `make deps` in the root project directory .
 2. **Build Docker image** by running `make build` in the root project directory .
 3. **Start containers and enter bash session**  by running `make start` in the root project directory.
-4. **Run the game** by running `python3 game.py` in the docker container.
+4. **Run the game** by running `make app` in the docker container.
 5. **Run unit tests** by running `make tests` in the docker container.
 
 ### Agentic design
