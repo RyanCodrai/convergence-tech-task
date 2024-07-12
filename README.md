@@ -27,7 +27,7 @@ We add some monitoring through the use of LangFuse and verbose logging statement
 
 The LLM calls are optimised by ensuring that they are run asynchronously. We set up a simple but extensible framework that allows us to run multiple simulations of the game concurrently. We use an asynchronous semaphore to restrict the concurrency to avoid being rate-limited by OpenAI. To handle errors we also make use of tenacity in order to retry agent actions when calls to LLMs or output parsing fails.
 
-We add four unit tests, one for each of our agents and we mock the output we might observe from the LLM. These tests aim to catch any small bugs that may result from agent interface changes. Ideally, these unit tests would be run as part of a CI/CD pipeline.
+We add four unit tests, one for each of our agents and we mock the output we might observe from each LLM. These tests aim to catch any small bugs that may result from agent interface changes. Ideally, these unit tests would be run as part of a CI/CD pipeline.
 
 ### Evaluation
 The task of the question answering agent is relatively simple but still sometimes prone to error. We could investigate incorrect answers by cross-checking the answers to questions in another LLM, either at runtime or afterwards. A rather simple gauge of how well the question planner performs is the number of questions required to guess the game topic. Over a large number of runs I expect this to be a good proxy for the combined quesiton planner and question reviewer team performance.
